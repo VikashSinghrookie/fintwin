@@ -8,7 +8,7 @@ FinTwin utilizes a robust microservices architecture containerized via **Docker*
 
 ### Core Microservices (Backend)
 
-Written in **Python (FastAPI)** and communicating with a single **PostgreSQL** database node (with separate logical models), the backend is broken out into four independent services:
+Written in **Python (FastAPI)** and communicating with a single **PostgreSQL** database node (with separate logical models), the backend is broken out into six independent services. It also utilizes **Redis** for high-speed volatile caching:
 
 1. **Account Service (`:8001`)**
    - Handles user registration, JWT generation, secure credential hashing, and basic balances.
@@ -25,6 +25,13 @@ Written in **Python (FastAPI)** and communicating with a single **PostgreSQL** d
    - Analyzes real-time metrics including live balance, transaction velocity, and anomaly detection to continuously generate a "Risk Score".
    - Generates user-specific UI notifications on the primary dashboard.
 
+5. **Portfolio Service (`:8005`)**
+   - Aggregates user account and transaction data to present a holistic view of the user's wealth.
+   - Implements robust pagination and optimizations for frontend display.
+
+6. **Notification Service (`:8006`)**
+   - Dedicated service for managing system and user-specific alerts.
+   - Integrates across services to keep users informed natively.
 ### Frontend
 
 - **Framework**: React 18
@@ -52,6 +59,7 @@ FinTwin adheres to a strict Zero-Trust philosophy. Data leakage between users is
 - `python-jose[cryptography]` (JWT Generation & Decoding)
 - `httpx` (Internal Server-to-Server HTTP Client)
 - `pydantic` (Data Validation)
+- `redis` (In-memory caching client)
 
 ### Frontend Packages (Node.js)
 
@@ -64,7 +72,7 @@ FinTwin adheres to a strict Zero-Trust philosophy. Data leakage between users is
 - `docker` & `docker-compose`
 - `nginx:latest`
 - `postgres:15`
-
+- `redis:alpine`
 ## 🚀 Setup & Execution
 
 ### Prerequisites
@@ -108,3 +116,8 @@ docker compose up -d --build
 
 - `GET /risk/notifications/{id}` (Generates smart alerts evaluating cross-service user data)
 - `POST /simulate` (Safely spins up Twin metrics analyzing virtual balance projections)
+
+### Portfolio & Notification
+
+- `GET /portfolio/` (Aggregates accounts and balances securely to summarize wealth)
+- `GET /notifications/` (Retrieves user-specific system alerts contextually)
