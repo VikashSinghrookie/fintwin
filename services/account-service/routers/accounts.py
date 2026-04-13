@@ -1,4 +1,6 @@
 import os
+import json
+import redis
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -15,6 +17,15 @@ JWT_SECRET = os.getenv("JWT_SECRET", "fintwin-super-secret-key-2024")
 JWT_ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+# Redis connection
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+try:
+    r = redis.from_url(REDIS_URL, decode_responses=True)
+except Exception:
+    r = None
+
+CACHE_TTL = 30  # 30 seconds
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -71,10 +82,38 @@ def check_account_exists(account_id: str, db: Session = Depends(get_db)):
 def get_account(account_id: str, db: Session = Depends(get_db), current_user: Account = Depends(get_current_user)):
     if account_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    # Try cache first
+    cache_key = f"account:{account_id}"
+    try:
+        if r:
+            cached = r.get(cache_key)
+            if cached:
+                return json.loads(cached)
+    except Exception:
+        pass
+
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    return account
+
+    account_data = {
+        "id": account.id,
+        "name": account.name,
+        "email": account.email,
+        "type": account.type,
+        "balance": account.balance,
+        "created_at": account.created_at.isoformat() if account.created_at else None,
+    }
+
+    # Store in cache
+    try:
+        if r:
+            r.setex(cache_key, CACHE_TTL, json.dumps(account_data))
+    except Exception:
+        pass
+
+    return account_data
 
 
 @router.put("/{account_id}/balance")
@@ -85,4 +124,12 @@ def update_balance(account_id: str, req: BalanceUpdate, db: Session = Depends(ge
     account.balance += req.delta
     db.commit()
     db.refresh(account)
+
+    # Invalidate cache
+    try:
+        if r:
+            r.delete(f"account:{account_id}")
+    except Exception:
+        pass
+
     return {"id": account.id, "balance": account.balance}

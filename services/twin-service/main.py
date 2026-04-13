@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from database import Base, engine
 from routers import twin
 
 app = FastAPI(title="FinTwin Twin Service", version="1.0.0")
@@ -13,6 +14,11 @@ app.add_middleware(
 )
 
 app.include_router(twin.router)
+
+
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
 
 
 @app.get("/")

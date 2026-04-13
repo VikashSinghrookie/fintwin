@@ -15,6 +15,8 @@ from scoring import compute_risk_score
 router = APIRouter(prefix="/risk", tags=["risk"])
 
 ACCOUNT_SERVICE_URL = os.getenv("ACCOUNT_SERVICE_URL", "http://account-service:8001")
+NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8006")
+INTERNAL_KEY = os.getenv("INTERNAL_KEY", "fintwin-internal-2024")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "fintwin-super-secret-key-2024")
 JWT_ALGORITHM = "HS256"
@@ -33,6 +35,28 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     return account_id
 
 
+async def send_risk_notification(account_id: str, score: int, flags: list):
+    """Send notification if risk score is above threshold."""
+    try:
+        if score > 40:
+            notif_type = "risk" if score > 60 else "alert"
+            flag_text = flags[0] if flags else ""
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"{NOTIFICATION_SERVICE_URL}/notifications/",
+                    json={
+                        "account_id": account_id,
+                        "title": "Risk alert on your account",
+                        "message": f"Risk score updated to {score}/100. {flag_text}",
+                        "type": notif_type,
+                    },
+                    headers={"X-Internal-Key": INTERNAL_KEY},
+                    timeout=5.0,
+                )
+    except Exception:
+        pass  # Risk analysis completes regardless of notification failure
+
+
 @router.post("/analyze", response_model=RiskScoreOut)
 async def analyze_risk(req: RiskAnalyzeRequest, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user)):
     # Force analysis on the current user's account only
@@ -46,7 +70,7 @@ async def analyze_risk(req: RiskAnalyzeRequest, db: Session = Depends(get_db), c
         existing.flags = json.dumps(result["flags"])
         db.commit()
         db.refresh(existing)
-        return RiskScoreOut(
+        response = RiskScoreOut(
             id=existing.id,
             account_id=existing.account_id,
             score=existing.score,
@@ -64,7 +88,7 @@ async def analyze_risk(req: RiskAnalyzeRequest, db: Session = Depends(get_db), c
         db.add(risk_record)
         db.commit()
         db.refresh(risk_record)
-        return RiskScoreOut(
+        response = RiskScoreOut(
             id=risk_record.id,
             account_id=risk_record.account_id,
             score=risk_record.score,
@@ -72,6 +96,11 @@ async def analyze_risk(req: RiskAnalyzeRequest, db: Session = Depends(get_db), c
             flags=result["flags"],
             updated_at=risk_record.updated_at,
         )
+
+    # Send risk notification if score > 40
+    await send_risk_notification(req.account_id, result["score"], result["flags"])
+
+    return response
 
 
 @router.get("/score/{account_id}", response_model=RiskScoreOut)
@@ -189,4 +218,3 @@ async def get_notifications(
     notifications.append({"message": "Digital Twin sync complete — your data is up to date", "type": "Info"})
 
     return notifications
-

@@ -11,15 +11,20 @@ export default function Transactions() {
   const [toAccount, setToAccount] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 10;
 
   const fetchData = async () => {
     try {
       const [accRes, txnRes] = await Promise.all([
         client.get('/accounts/'),
-        client.get('/transactions/'),
+        client.get(`/transactions/?limit=${PAGE_SIZE}&offset=0`),
       ]);
       setAccounts(accRes.data);
-      setTransactions(txnRes.data);
+      const txns = txnRes.data;
+      setTransactions(txns);
+      setHasMore(txns.length >= PAGE_SIZE);
       if (accRes.data.length > 0 && !accountId) {
         setAccountId(accRes.data[0].id);
       }
@@ -29,6 +34,20 @@ export default function Transactions() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const res = await client.get(`/transactions/?limit=${PAGE_SIZE}&offset=${transactions.length}`);
+      const newTxns = res.data;
+      setTransactions(prev => [...prev, ...newTxns]);
+      setHasMore(newTxns.length >= PAGE_SIZE);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -141,6 +160,13 @@ export default function Transactions() {
               </div>
             )})}
           </div>
+          {hasMore && transactions.length > 0 && (
+            <div style={{ padding: '12px 0', textAlign: 'center' }}>
+              <button className="btn btn-outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading…' : 'Load More'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

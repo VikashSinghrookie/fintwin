@@ -9,6 +9,8 @@ import Accounts from './pages/Accounts';
 import Transactions from './pages/Transactions';
 import DigitalTwin from './pages/DigitalTwin';
 import RiskAnalysis from './pages/RiskAnalysis';
+import Portfolio from './pages/Portfolio';
+import Notifications from './pages/Notifications';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -39,6 +41,8 @@ export default function App() {
       case 'transactions': return <Transactions />;
       case 'twin': return <DigitalTwin />;
       case 'risk': return <RiskAnalysis />;
+      case 'portfolio': return <Portfolio />;
+      case 'notifications': return <Notifications />;
       default: return <Dashboard />;
     }
   };

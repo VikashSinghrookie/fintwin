@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import client from '../api/client';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
@@ -6,18 +8,41 @@ const navItems = [
   { id: 'transactions', label: 'Transactions', icon: '↕' },
   { id: 'twin', label: 'Digital Twin', icon: '◷' },
   { id: 'risk', label: 'Risk Analysis', icon: '⚠' },
+  { id: 'portfolio', label: 'Portfolio', icon: '📈' },
+  { id: 'notifications', label: 'Notifications', icon: '🔔', hasBadge: true },
 ];
 
 export default function Sidebar({ isOpen, onClose, currentPage, setCurrentPage }) {
   const { user, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : '??';
 
+  const fetchUnreadCount = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await client.get(`/notifications/count/${user.id}`);
+      setUnreadCount(res.data.unread || 0);
+    } catch (err) {
+      // Silently fail — notification service may not be up yet
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000); // Every 30 seconds
+    return () => clearInterval(interval);
+  }, [user]);
+
   const handleNav = (pageId) => {
     setCurrentPage(pageId);
     onClose();
+    // Refresh count when navigating away from notifications
+    if (pageId !== 'notifications') {
+      fetchUnreadCount();
+    }
   };
 
   return (
@@ -37,7 +62,25 @@ export default function Sidebar({ isOpen, onClose, currentPage, setCurrentPage }
               onClick={() => handleNav(item.id)}
             >
               <span className="nav-icon">{item.icon}</span>
-              {item.label}
+              <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
+              {item.hasBadge && unreadCount > 0 && (
+                <span style={{
+                  background: 'var(--red)',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 5px',
+                  lineHeight: 1,
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>

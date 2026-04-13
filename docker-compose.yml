@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   db:
     image: postgres:15
@@ -18,6 +16,12 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   account-service:
     build: ./services/account-service
     ports:
@@ -26,9 +30,12 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/fintwin
       JWT_SECRET: fintwin-super-secret-key-2024
       ACCOUNT_SERVICE_URL: http://account-service:8001
+      REDIS_URL: redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   transaction-service:
     build: ./services/transaction-service
@@ -38,6 +45,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/fintwin
       JWT_SECRET: fintwin-super-secret-key-2024
       ACCOUNT_SERVICE_URL: http://account-service:8001
+      NOTIFICATION_SERVICE_URL: http://notification-service:8006
+      INTERNAL_KEY: fintwin-internal-2024
     depends_on:
       db:
         condition: service_healthy
@@ -47,8 +56,14 @@ services:
     ports:
       - "8003:8003"
     environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/fintwin
       JWT_SECRET: fintwin-super-secret-key-2024
       ACCOUNT_SERVICE_URL: http://account-service:8001
+      NOTIFICATION_SERVICE_URL: http://notification-service:8006
+      INTERNAL_KEY: fintwin-internal-2024
+    depends_on:
+      db:
+        condition: service_healthy
 
   risk-service:
     build: ./services/risk-service
@@ -58,6 +73,32 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/fintwin
       JWT_SECRET: fintwin-super-secret-key-2024
       ACCOUNT_SERVICE_URL: http://account-service:8001
+      NOTIFICATION_SERVICE_URL: http://notification-service:8006
+      INTERNAL_KEY: fintwin-internal-2024
+    depends_on:
+      db:
+        condition: service_healthy
+
+  portfolio-service:
+    build: ./services/portfolio-service
+    ports:
+      - "8005:8005"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/fintwin
+      JWT_SECRET: fintwin-super-secret-key-2024
+      INTERNAL_KEY: fintwin-internal-2024
+    depends_on:
+      db:
+        condition: service_healthy
+
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "8006:8006"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/fintwin
+      JWT_SECRET: fintwin-super-secret-key-2024
+      INTERNAL_KEY: fintwin-internal-2024
     depends_on:
       db:
         condition: service_healthy
@@ -73,6 +114,8 @@ services:
       - transaction-service
       - twin-service
       - risk-service
+      - portfolio-service
+      - notification-service
 
 volumes:
   pgdata:
